@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "persona-engine"
+version = "0.1.0"
+description = "Deterministic persona generator SDK for LLMs, games, and training."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [
+  { name = "Your Name" }
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/sshafer101/persona_engine"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["persona_engine"]
+
