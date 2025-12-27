@@ -1,6 +1,0 @@
-
-[dev]
-pytest>=8
-build>=1.2
-twine>=5
-ruff>=0.6
