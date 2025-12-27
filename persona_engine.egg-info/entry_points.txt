@@ -1,0 +1,2 @@
+[console_scripts]
+persona-engine = persona_engine.cli:main
