@@ -2,7 +2,8 @@
 
 Deterministic persona generator for LLMs, games, simulations, and training.
 
-Give it a seed, get a rich fake person plus a ready to use system prompt. Same seed, same persona.
+Give it a seed, get a rich fake person plus a ready to use system prompt.
+Same seed plus same libraries equals same persona.
 
 > Status: early MVP. API may change.
 
@@ -26,33 +27,7 @@ Generate an LLM system prompt:
 persona-engine prompt --seed 42
 ```
 
-No seed picks a random one (and prints the chosen seed in the JSON):
-
-```bash
-persona-engine generate --include-seed
-```
-
-## Features
-
-- Seed based personas
-- MBTI scores that drive personality descriptions
-- Extra knobs:
-  - occupation
-  - interests
-  - tech savviness
-  - political leaning
-  - religion or worldview
-  - risk tolerance
-  - financial attitude
-  - time orientation
-- LLM ready:
-  - `persona_to_prompt` builds a system prompt string
-  - model agnostic, works with any LLM or API
-- CLI and Python API
-- Deterministic:
-  - same seed and same inputs give the same persona JSON
-
-## Python usage
+Python usage:
 
 ```python
 from persona_engine import generate_persona, persona_to_prompt
@@ -64,75 +39,97 @@ system_prompt = persona_to_prompt(persona)
 print(system_prompt)
 ```
 
-## CLI usage
+## Key idea
 
-Generate persona JSON:
+Persona Engine is library driven.
+
+Most persona fields come from JSON libraries such as:
+
+- occupations
+- interests
+- cities
+- countries
+- political_leanings
+- religions
+
+You can use the built in default pack, or point the generator at your own library directory.
+
+## Library format
+
+A library file is JSON.
+
+Simple list:
+
+```json
+["A", "B", "C"]
+```
+
+Weighted list:
+
+```json
+[
+  {"value": "A", "weight": 3},
+  {"value": "B", "weight": 1}
+]
+```
+
+Important:
+- JSON must be valid JSON. No trailing commas.
+- The default loader is lenient and will ignore full line comments that start with `//`.
+
+## Using your own libraries
+
+Use `--lib-dir` to load JSON files from a directory.
 
 ```bash
-persona-engine generate --seed 42
+persona-engine prompt --seed 2 --lib-dir ./my_libs
 ```
 
-Generate an LLM system prompt:
+Rules:
+- Each `*.json` file in the directory becomes a library key.
+- The filename (without `.json`) is the key.
+  Example: `occupations.json` becomes `occupations`.
+- If a file matches a known core key, it will drive that field.
+- Extra files are sampled and included under `extras` in the persona JSON.
+  They can also be included in the prompt output.
+
+You can also override a single library by key:
 
 ```bash
-persona-engine prompt --seed 42
+persona-engine prompt --seed 2 --lib occupations=./my_libs/occupations.json
 ```
 
-If you omit `--seed`, a random persona is generated. Use `--include-seed` to print the chosen seed inside the JSON output.
+## CLI reference
 
-## Design notes
-
-- Deterministic by seed  
-  `generate_persona(seed=42)` will always return the same persona as long as the generator code and version are unchanged.
-
-- MBTI driven traits  
-  The generator first rolls MBTI axis scores (I/E, N/S, T/F, P/J), then:
-  - derives the 4 letter MBTI type
-  - converts scores into human readable traits
-
-- Override and extension hooks  
-  `generate_persona` supports:
-  - `overrides`: a dict of field names to forced values
-  - `extra_traits`: a list of extra personality trait strings to append
-
-Example:
-
-```python
-persona = generate_persona(
-    seed=1234,
-    overrides={
-        "occupation": "blacksmith",
-        "tech_savvy": "very low - no modern technology",
-        "location": "Kingsbridge, Northern Kingdom",
-        "education_level": "no formal schooling",
-    },
-    extra_traits=[
-        "skilled with metalworking",
-        "loyal to the local lord",
-    ],
-)
+```bash
+persona-engine generate [--seed N] [--pack NAME] [--lib-dir DIR] [--lib key=path]
+persona-engine prompt   [--seed N] [--pack NAME] [--lib-dir DIR] [--lib key=path]
 ```
 
-## Use cases
+Notes:
+- `--pack` selects the built in pack (default is `default`).
+- `--lib-dir` layers on top of the built in pack.
+- `--lib key=path` is a per key override.
 
-- LLM roleplay
-  - Use `persona_to_prompt(persona)` as your system message
-  - Keep the seed in logs so you can reproduce the same persona later
+## Determinism and versioning
 
-- Training and coaching
-  - Create a fixed set of personas for repeated drills and performance tracking
+Determinism holds when these are the same:
+- seed
+- generator version
+- the set of library files used
 
-- Games and NPCs
-  - Store a seed per NPC and regenerate the full profile on load
+The persona JSON includes:
+- `seed`
+- `library_hash`
 
-- Testing and QA
-  - Use personas as deterministic fixtures for LLM based flows
+If you change any library file, `library_hash` changes.
 
 ## Roadmap
 
-- Presets for different roles (enterprise IT buyer, consumer gamer, student)
-- Larger banks of occupations, interests, and traits loaded from data files
-- Versioning and snapshot tests for persona schemas and default presets
+- Larger default libraries (names, jobs, interests, traits)
+- Relationship aware libraries (example: city depends on country)
+- Optional schema and validation helpers for packs
+- More examples and demos
 
 ## Development install
 
@@ -142,23 +139,6 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 pytest
 ```
-
-## Contributing
-
-Suggestions, issues, and PRs are welcome, especially around:
-- new presets and trait banks
-- better MBTI to trait mapping
-- additional fields that are broadly useful for LLM sims
-
-Before submitting a PR:
-
-1. Run tests:
-
-   ```bash
-   pytest
-   ```
-
-2. Add or update tests for any new behavior.
 
 ## License
 
