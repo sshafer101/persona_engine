@@ -1,17 +1,23 @@
-from dataclasses import dataclass, asdict
-from typing import List, Dict, Any
+# persona_engine/models.py
+from __future__ import annotations
+
+from dataclasses import asdict, dataclass, field
+from typing import Any, Dict, List
 
 
-@dataclass
+@dataclass(frozen=True)
 class MBTIScores:
     type_code: str
-    ie: int  # I vs E
-    ns: int  # N vs S
-    tf: int  # T vs F
-    pj: int  # P vs J
+    ie: int
+    ns: int
+    tf: int
+    pj: int
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
 
 
-@dataclass
+@dataclass(frozen=True)
 class Persona:
     name: str
     age: int
@@ -32,7 +38,11 @@ class Persona:
     financial_attitude: str
     time_orientation: str
 
+    seed: int = 0
+    library_hash: str = ""
+    extras: Dict[str, Any] = field(default_factory=dict)
+
     def to_dict(self) -> Dict[str, Any]:
         d = asdict(self)
-        d["mbti"] = asdict(self.mbti)
+        d["mbti"] = self.mbti.to_dict()
         return d

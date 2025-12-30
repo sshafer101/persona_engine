@@ -44,10 +44,15 @@ dev = [
   "ruff>=0.6",
 ]
 
+[tool.setuptools]
+include-package-data = true
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["persona_engine*"]
 
+[tool.setuptools.package-data]
+persona_engine = ["data/**/*.json"]
+
 [tool.pytest.ini_options]
 testpaths = ["test", "tests"]
-

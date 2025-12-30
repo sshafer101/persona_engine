@@ -1,0 +1,8 @@
+
+{
+  "Germany": ["Berlin", "Munich", "Hamburg"],
+  "United Kingdom": ["London", "Manchester", "Birmingham"],
+  "Canada": ["Toronto", "Vancouver", "Montreal"],
+  "United States": ["New York", "Austin", "Seattle"],
+  "India": ["Mumbai", "Delhi", "Bangalore"]
+}

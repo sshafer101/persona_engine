@@ -1,77 +1,84 @@
 # persona_engine/cli.py
-
-from __future__ import annotations
-
 import argparse
 import json
-import secrets
 import sys
-from typing import Any
+from typing import Dict, List, Optional
 
-from persona_engine import generate_persona, persona_to_prompt
+from .generator import generate_persona, persona_to_prompt
 
 
-def _pick_seed(seed: int | None) -> int:
-    if seed is not None:
-        return int(seed)
-    return secrets.randbelow(2**32)
+def _parse_lib_kv(items: Optional[List[str]]) -> Optional[Dict[str, str]]:
+    if not items:
+        return None
+    out: Dict[str, str] = {}
+    for item in items:
+        if "=" not in item:
+            raise ValueError(f"Invalid --lib entry: {item}. Expected key=path")
+        key, path = item.split("=", 1)
+        key = key.strip()
+        path = path.strip()
+        if not key or not path:
+            raise ValueError(f"Invalid --lib entry: {item}. Expected key=path")
+        out[key] = path
+    return out
+
+
+def _add_common_args(p: argparse.ArgumentParser) -> None:
+    p.add_argument("--seed", type=int, default=None, help="Seed for deterministic generation")
+    p.add_argument("--pack", type=str, default="default", help="Built-in library pack name")
+    p.add_argument("--lib-dir", type=str, default=None, help="Directory of JSON libraries")
+    p.add_argument(
+        "--lib",
+        action="append",
+        default=None,
+        help="Override a single library via key=path (repeatable)",
+    )
 
 
 def cmd_generate(args: argparse.Namespace) -> int:
-    seed = _pick_seed(args.seed)
-    persona = generate_persona(seed=seed)
-    data: Any = persona.to_dict()
-
-    if args.include_seed and isinstance(data, dict):
-        data.setdefault("seed", seed)
-
-    print(json.dumps(data, indent=2, ensure_ascii=False, sort_keys=True))
+    lib_files = _parse_lib_kv(args.lib)
+    persona = generate_persona(
+        seed=args.seed,
+        pack=args.pack,
+        lib_dir=args.lib_dir,
+        lib_files=lib_files,
+    )
+    print(json.dumps(persona.to_dict(), indent=2, sort_keys=True))
     return 0
 
 
 def cmd_prompt(args: argparse.Namespace) -> int:
-    seed = _pick_seed(args.seed)
-    persona = generate_persona(seed=seed)
+    lib_files = _parse_lib_kv(args.lib)
+    persona = generate_persona(
+        seed=args.seed,
+        pack=args.pack,
+        lib_dir=args.lib_dir,
+        lib_files=lib_files,
+    )
     print(persona_to_prompt(persona))
-    if args.print_seed:
-        print(f"\n(seed: {seed})", file=sys.stderr)
     return 0
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="persona-engine",
-        description="Deterministic persona generator. Same seed, same persona.",
-    )
+def main(argv: Optional[List[str]] = None) -> int:
+    parser = argparse.ArgumentParser(prog="persona-engine", description="Deterministic persona generator")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    p_gen = sub.add_parser("generate", help="Print persona JSON")
-    p_gen.add_argument("--seed", type=int, default=None, help="Seed for deterministic output")
-    p_gen.add_argument(
-        "--include-seed",
-        action="store_true",
-        help="Include seed field in the emitted JSON",
-    )
+    p_gen = sub.add_parser("generate", help="Generate persona JSON")
+    _add_common_args(p_gen)
     p_gen.set_defaults(func=cmd_generate)
 
-    p_prompt = sub.add_parser("prompt", help="Print LLM system prompt for the persona")
-    p_prompt.add_argument("--seed", type=int, default=None, help="Seed for deterministic output")
-    p_prompt.add_argument(
-        "--print-seed",
-        action="store_true",
-        help="Print seed to stderr (useful when seed is omitted)",
-    )
+    p_prompt = sub.add_parser("prompt", help="Generate the LLM system prompt for a persona")
+    _add_common_args(p_prompt)
     p_prompt.set_defaults(func=cmd_prompt)
 
-    return parser
-
-
-def main(argv: list[str] | None = None) -> int:
-    parser = build_parser()
     args = parser.parse_args(argv)
-    return int(args.func(args))
+
+    try:
+        return int(args.func(args))
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
