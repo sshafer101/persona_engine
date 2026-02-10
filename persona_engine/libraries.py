@@ -100,6 +100,48 @@ def _normalize_list_payload(payload: Union[List[str], List[dict]]) -> Tuple[List
     raise ValueError("Library JSON must be a list of strings or a list of objects with value and optional weight")
 
 
+def _validate_list_payload(payload: Any, label: str) -> List[str]:
+    errs: List[str] = []
+    if not isinstance(payload, list):
+        errs.append(f"{label}: expected list, got {type(payload).__name__}")
+        return errs
+
+    if not payload:
+        errs.append(f"{label}: empty list")
+        return errs
+
+    if all(isinstance(x, str) for x in payload):
+        if not any(str(x).strip() for x in payload):
+            errs.append(f"{label}: list contains only empty strings")
+        return errs
+
+    if all(isinstance(x, dict) for x in payload):
+        saw_value = False
+        for idx, item in enumerate(payload):
+            if "value" not in item:
+                errs.append(f"{label}: item {idx} missing 'value'")
+                continue
+            v = str(item.get("value", "")).strip()
+            if not v:
+                errs.append(f"{label}: item {idx} has empty 'value'")
+                continue
+            saw_value = True
+            if "weight" in item:
+                try:
+                    wf = float(item["weight"])
+                except Exception:
+                    errs.append(f"{label}: item {idx} has invalid weight (not a number)")
+                    continue
+                if wf <= 0:
+                    errs.append(f"{label}: item {idx} has non-positive weight")
+        if not saw_value:
+            errs.append(f"{label}: no usable values found")
+        return errs
+
+    errs.append(f"{label}: mixed or unsupported list element types")
+    return errs
+
+
 def _list_builtin_json_files(pack: str) -> Dict[str, bytes]:
     base = resources.files("persona_engine") / "data" / pack
     result: Dict[str, bytes] = {}
@@ -369,6 +411,63 @@ class LibraryStore:
             errs = _validate_chain_payload(chain, payload)
             for err in errs:
                 errors.append(f"{err} (source={source})")
+        return errors
+
+    def validate_all(self, required_keys: Optional[List[str]] = None) -> List[str]:
+        errors: List[str] = []
+
+        for key, filename in self._independent.items():
+            raw = self._raw_by_filename[filename]
+            source = self._source_by_filename.get(filename, filename)
+            try:
+                payload = self._loads(raw)
+            except Exception as e:
+                errors.append(f"{key}: JSON parse error in {source}: {e}")
+                continue
+            for err in _validate_list_payload(payload, f"{key}"):
+                errors.append(f"{err} (source={source})")
+
+        for (child, parent), filename in self._dependent.items():
+            raw = self._raw_by_filename[filename]
+            source = self._source_by_filename.get(filename, filename)
+            try:
+                payload = self._loads(raw)
+            except Exception as e:
+                errors.append(f"{child}@{parent}: JSON parse error in {source}: {e}")
+                continue
+
+            if not isinstance(payload, dict):
+                errors.append(f"{child}@{parent}: expected top-level object (dict), got {type(payload).__name__} (source={source})")
+                continue
+
+            if not payload:
+                errors.append(f"{child}@{parent}: empty object (source={source})")
+                continue
+
+            for parent_val, child_list in payload.items():
+                label = f"{child}@{parent}:{parent_val}"
+                for err in _validate_list_payload(child_list, label):
+                    errors.append(f"{err} (source={source})")
+
+        for chain in self.chained_chains():
+            filename = self._chained[chain]
+            raw = self._raw_by_filename[filename]
+            source = self._source_by_filename.get(filename, filename)
+            try:
+                payload = self._loads(raw)
+            except Exception as e:
+                errors.append(f"{'@'.join(chain)}: JSON parse error in {source}: {e}")
+                continue
+
+            errs = _validate_chain_payload(chain, payload)
+            for err in errs:
+                errors.append(f"{err} (source={source})")
+
+        if required_keys:
+            for key in required_keys:
+                if not self.has(key):
+                    errors.append(f"missing required library: {key}")
+
         return errors
 
     def pick(self, rng: random.Random, key: str) -> str:

@@ -39,6 +39,20 @@ system_prompt = persona_to_prompt(persona)
 print(system_prompt)
 ```
 
+## Demo
+
+Generate a few varied personas (JSON summary):
+
+```bash
+python scripts/demo.py
+```
+
+Generate a single persona prompt:
+
+```bash
+persona-engine prompt --seed 42
+```
+
 ## Key idea
 
 Persona Engine is library driven.

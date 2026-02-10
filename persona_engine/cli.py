@@ -4,7 +4,7 @@ import json
 import sys
 from typing import Dict, List, Optional
 
-from .generator import generate_persona, persona_to_prompt
+from .generator import REQUIRED_KEYS, generate_persona, persona_to_prompt
 from .libraries import LibraryStore
 
 
@@ -73,7 +73,7 @@ def cmd_validate_pack(args: argparse.Namespace) -> int:
         lenient_json=True,
     )
 
-    errors = libs.validate_all_relationships()
+    errors = libs.validate_all(required_keys=sorted(REQUIRED_KEYS))
     if errors:
         for e in errors:
             print(e, file=sys.stderr)

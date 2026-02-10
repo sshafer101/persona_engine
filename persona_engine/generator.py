@@ -94,6 +94,54 @@ _FALLBACK = {
     "names": [],
 }
 
+# Core library keys that define the persona surface area.
+CORE_KEYS = {
+    "names",
+    "first_names_male",
+    "first_names_female",
+    "first_names_any",
+    "last_names",
+    "genders",
+    "countries",
+    "cities",
+    "occupations",
+    "interests",
+    "personality_traits",
+    "communication_styles",
+    "life_goals",
+    "main_concerns",
+    "education_levels",
+    "tech_savvy_levels",
+    "political_leanings",
+    "religions",
+    "risk_tolerance_levels",
+    "financial_attitudes",
+    "time_orientations",
+}
+
+# Keys expected in the default pack (used for validation).
+REQUIRED_KEYS = {
+    "first_names_male",
+    "first_names_female",
+    "last_names",
+    "genders",
+    "countries",
+    "cities",
+    "occupations",
+    "interests",
+    "personality_traits",
+    "communication_styles",
+    "life_goals",
+    "main_concerns",
+    "education_levels",
+    "tech_savvy_levels",
+    "political_leanings",
+    "religions",
+    "risk_tolerance_levels",
+    "financial_attitudes",
+    "time_orientations",
+}
+
 # Allow users to name their library files either plural (preferred) or singular (common mistake).
 # Example: education_level.json should still satisfy education_levels.
 _KEY_ALIASES: Dict[str, List[str]] = {
@@ -266,29 +314,7 @@ def generate_persona(
 
     mbti = _random_mbti(rng)
 
-    mapped = {
-        "names",
-        "first_names_male",
-        "first_names_female",
-        "first_names_any",
-        "last_names",
-        "genders",
-        "countries",
-        "cities",
-        "occupations",
-        "interests",
-        "personality_traits",
-        "communication_styles",
-        "life_goals",
-        "main_concerns",
-        "education_levels",
-        "tech_savvy_levels",
-        "political_leanings",
-        "religions",
-        "risk_tolerance_levels",
-        "financial_attitudes",
-        "time_orientations",
-    }
+    mapped = set(CORE_KEYS)
 
     # Also treat singular aliases as mapped so they do not leak into extras.
     for alts in _KEY_ALIASES.values():
