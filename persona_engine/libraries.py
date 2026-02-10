@@ -8,7 +8,7 @@ import random
 import re
 from dataclasses import dataclass
 from importlib import resources
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 
 @dataclass(frozen=True)
@@ -25,6 +25,14 @@ class ResolvedDependentLibrary:
     child: str
     parent: str
     mapping: Dict[str, Tuple[List[str], Optional[List[float]]]]
+    source: str
+    raw_bytes: bytes
+
+
+@dataclass(frozen=True)
+class ResolvedChainedLibrary:
+    chain: Tuple[str, ...]
+    data: Dict[str, Any]
     source: str
     raw_bytes: bytes
 
@@ -125,6 +133,67 @@ def _stem(filename: str) -> str:
     return filename
 
 
+def _parse_chain_from_stem(stem: str) -> Optional[Tuple[str, ...]]:
+    if "@" not in stem:
+        return None
+    parts = tuple(p.strip() for p in stem.split("@") if p.strip())
+    if len(parts) < 2:
+        return None
+    return parts
+
+
+def _validate_chain_payload(chain: Tuple[str, ...], payload: Any) -> List[str]:
+    errs: List[str] = []
+    label = "@".join(chain)
+
+    if not isinstance(payload, dict):
+        errs.append(f"{label}: expected top-level object (dict), got {type(payload).__name__}")
+        return errs
+
+    leaf_depth = len(chain) - 1
+
+    def walk(node: Any, depth: int, path: List[str]) -> None:
+        at = ".".join(path) if path else "<root>"
+        if depth < leaf_depth:
+            if not isinstance(node, dict):
+                errs.append(f"{label}: expected object at {at}, got {type(node).__name__}")
+                return
+            if not node:
+                errs.append(f"{label}: empty object at {at}")
+                return
+            for k, v in node.items():
+                if not isinstance(k, str) or not k.strip():
+                    errs.append(f"{label}: non-string key at {at}")
+                    continue
+                walk(v, depth + 1, path + [k])
+            return
+
+        if not isinstance(node, list):
+            errs.append(f"{label}: expected list at {at}, got {type(node).__name__}")
+            return
+
+        try:
+            vals, _weights = _normalize_list_payload(node)
+        except Exception as e:
+            errs.append(f"{label}: invalid list payload at {at}: {e}")
+            return
+
+        if not vals:
+            errs.append(f"{label}: empty list at {at}")
+
+    walk(payload, 0, [])
+    return errs
+
+
+def _pick_from_leaf_list(rng: random.Random, node: Any) -> str:
+    vals, weights = _normalize_list_payload(node)
+    if not vals:
+        return ""
+    if weights:
+        return rng.choices(vals, weights=weights, k=1)[0]
+    return rng.choice(vals)
+
+
 class LibraryStore:
     def __init__(
         self,
@@ -143,9 +212,11 @@ class LibraryStore:
 
         self._independent: Dict[str, str] = {}
         self._dependent: Dict[Tuple[str, str], str] = {}
+        self._chained: Dict[Tuple[str, ...], str] = {}
 
         self._resolved_independent: Dict[str, ResolvedLibrary] = {}
         self._resolved_dependent: Dict[Tuple[str, str], ResolvedDependentLibrary] = {}
+        self._resolved_chained: Dict[Tuple[str, ...], ResolvedChainedLibrary] = {}
 
         self._discover()
 
@@ -171,17 +242,21 @@ class LibraryStore:
             self._source_by_filename[filename] = os.path.abspath(path)
 
         for filename in sorted(self._raw_by_filename.keys()):
-            stem = _stem(filename)
-            if "@" in stem:
-                child, parent = stem.split("@", 1)
-                child = child.strip()
-                parent = parent.strip()
-                if child and parent:
+            stem = _stem(filename).strip()
+            if not stem:
+                continue
+
+            chain = _parse_chain_from_stem(stem)
+            if chain:
+                self._chained[chain] = filename
+                if len(chain) == 2:
+                    child, parent = chain[0], chain[1]
                     self._dependent[(child, parent)] = filename
-            else:
-                key = stem.strip()
-                if key:
-                    self._independent[key] = filename
+                continue
+
+            key = stem.strip()
+            if key:
+                self._independent[key] = filename
 
     def keys(self) -> List[str]:
         k = set(self._independent.keys())
@@ -192,11 +267,17 @@ class LibraryStore:
     def dependent_pairs(self) -> List[Tuple[str, str]]:
         return sorted(self._dependent.keys())
 
+    def chained_chains(self) -> List[Tuple[str, ...]]:
+        return sorted(self._chained.keys(), key=lambda c: (len(c), c))
+
     def has(self, key: str) -> bool:
         return key in self._independent
 
     def has_dep(self, child: str, parent: str) -> bool:
         return (child, parent) in self._dependent
+
+    def has_chain(self, chain: Tuple[str, ...]) -> bool:
+        return chain in self._chained
 
     def _loads(self, raw: bytes) -> object:
         if self.lenient_json:
@@ -252,6 +333,43 @@ class LibraryStore:
         lib = ResolvedDependentLibrary(child=child, parent=parent, mapping=mapping, source=source, raw_bytes=raw)
         self._resolved_dependent[pair] = lib
         return lib
+
+    def resolve_chain(self, chain: Tuple[str, ...]) -> ResolvedChainedLibrary:
+        if chain in self._resolved_chained:
+            return self._resolved_chained[chain]
+
+        if chain not in self._chained:
+            raise KeyError(f"Unknown chained library: {'@'.join(chain)}")
+
+        filename = self._chained[chain]
+        raw = self._raw_by_filename[filename]
+        source = self._source_by_filename.get(filename, filename)
+
+        payload = self._loads(raw)
+        errs = _validate_chain_payload(chain, payload)
+        if errs:
+            raise ValueError(f"Invalid chained library {'@'.join(chain)} in {source}: " + "; ".join(errs))
+
+        lib = ResolvedChainedLibrary(chain=chain, data=payload, source=source, raw_bytes=raw)
+        self._resolved_chained[chain] = lib
+        return lib
+
+    def validate_all_relationships(self) -> List[str]:
+        errors: List[str] = []
+        for chain in self.chained_chains():
+            filename = self._chained[chain]
+            raw = self._raw_by_filename[filename]
+            source = self._source_by_filename.get(filename, filename)
+            try:
+                payload = self._loads(raw)
+            except Exception as e:
+                errors.append(f"{'@'.join(chain)}: JSON parse error in {source}: {e}")
+                continue
+
+            errs = _validate_chain_payload(chain, payload)
+            for err in errs:
+                errors.append(f"{err} (source={source})")
+        return errors
 
     def pick(self, rng: random.Random, key: str) -> str:
         lib = self.resolve(key)
@@ -317,6 +435,37 @@ class LibraryStore:
 
         return ""
 
+    def pick_chain(self, rng: random.Random, chain: Tuple[str, ...]) -> Dict[str, str]:
+        lib = self.resolve_chain(chain)
+        data: Any = lib.data
+
+        chosen: Dict[str, str] = {}
+        parentmost_key = chain[-1]
+
+        parent_val = rng.choice(list(data.keys()))
+        chosen[parentmost_key] = parent_val
+        node: Any = data[parent_val]
+
+        for idx in range(len(chain) - 2, -1, -1):
+            key = chain[idx]
+
+            if isinstance(node, dict):
+                if not node:
+                    raise ValueError(f"{'@'.join(chain)}: empty object encountered while selecting {key}")
+                next_k = rng.choice(list(node.keys()))
+                chosen[key] = str(next_k)
+                node = node[next_k]
+                continue
+
+            if isinstance(node, list):
+                chosen[key] = _pick_from_leaf_list(rng, node)
+                node = None
+                continue
+
+            raise ValueError(f"{'@'.join(chain)}: unexpected node type {type(node).__name__} while selecting {key}")
+
+        return chosen
+
     def library_hash(self) -> str:
         h = hashlib.sha256()
         h.update(self.pack.encode("utf-8"))
@@ -332,6 +481,13 @@ class LibraryStore:
         for (child, parent) in sorted(self._dependent.keys()):
             filename = self._dependent[(child, parent)]
             h.update(f"{child}@{parent}".encode("utf-8"))
+            h.update(b"\0")
+            h.update(self._raw_by_filename[filename])
+            h.update(b"\0")
+
+        for chain in sorted([c for c in self._chained.keys() if len(c) > 2], key=lambda c: (len(c), c)):
+            filename = self._chained[chain]
+            h.update("@".join(chain).encode("utf-8"))
             h.update(b"\0")
             h.update(self._raw_by_filename[filename])
             h.update(b"\0")

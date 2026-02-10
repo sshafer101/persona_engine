@@ -8,12 +8,56 @@ from .models import Persona, MBTIScores
 
 _FALLBACK = {
     "genders": ["male", "female", "nonbinary", "unspecified"],
-    "first_names_male": ["James", "John", "Robert", "Michael", "David", "Daniel", "Christopher", "Matthew", "Anthony", "Andrew"],
+    "first_names_male": [
+        "James",
+        "John",
+        "Robert",
+        "Michael",
+        "David",
+        "Daniel",
+        "Christopher",
+        "Matthew",
+        "Anthony",
+        "Andrew",
+    ],
     "first_names_female": ["Mary", "Patricia", "Jennifer", "Linda", "Elizabeth", "Jessica", "Sarah", "Karen", "Nancy", "Lisa"],
     "last_names": ["Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Miller", "Davis", "Rodriguez", "Martinez"],
-    "occupations": ["software engineer", "teacher", "nurse", "sales manager", "student", "freelance designer", "data analyst", "mechanic", "small business owner", "customer support specialist"],
-    "interests": ["video games", "hiking", "reading sci fi", "cooking", "watching sports", "fitness", "DIY projects", "board games", "photography", "learning languages"],
-    "personality_traits": ["introverted", "extroverted", "detail oriented", "big picture thinker", "risk averse", "impulsive", "empathetic", "logical", "conflict avoidant", "direct and blunt"],
+    "occupations": [
+        "software engineer",
+        "teacher",
+        "nurse",
+        "sales manager",
+        "student",
+        "freelance designer",
+        "data analyst",
+        "mechanic",
+        "small business owner",
+        "customer support specialist",
+    ],
+    "interests": [
+        "video games",
+        "hiking",
+        "reading sci fi",
+        "cooking",
+        "watching sports",
+        "fitness",
+        "DIY projects",
+        "board games",
+        "photography",
+        "learning languages",
+    ],
+    "personality_traits": [
+        "introverted",
+        "extroverted",
+        "detail oriented",
+        "big picture thinker",
+        "risk averse",
+        "impulsive",
+        "empathetic",
+        "logical",
+        "conflict avoidant",
+        "direct and blunt",
+    ],
     "communication_styles": ["short and direct", "friendly and chatty", "formal and precise", "sarcastic but good natured", "supportive and encouraging"],
     "life_goals": ["advance their career", "spend more time with family", "start a side business", "pay off debt", "travel more", "get healthier"],
     "main_concerns": ["job security", "work life balance", "money and debt", "health issues", "time management", "imposter syndrome"],
@@ -40,9 +84,43 @@ _FALLBACK = {
     "religions": ["none and secular", "spiritual but not religious", "Christian", "Muslim", "Jewish", "Hindu", "Buddhist", "agnostic", "atheist"],
     "risk_tolerance_levels": ["very risk averse", "somewhat cautious", "moderate risk taker", "likes taking risks", "very high risk taker"],
     "financial_attitudes": ["frugal and focused on saving", "balanced spender and saver", "impulsive spender", "investing focused and wealth oriented", "avoids thinking about money"],
-    "time_orientations": ["very present focused and spontaneous", "mostly present focused with some planning", "balanced between present and future", "future focused planner", "long term strategist who thinks in decades"],
+    "time_orientations": [
+        "very present focused and spontaneous",
+        "mostly present focused with some planning",
+        "balanced between present and future",
+        "future focused planner",
+        "long term strategist who thinks in decades",
+    ],
     "names": [],
 }
+
+# Allow users to name their library files either plural (preferred) or singular (common mistake).
+# Example: education_level.json should still satisfy education_levels.
+_KEY_ALIASES: Dict[str, List[str]] = {
+    "communication_styles": ["communication_style"],
+    "life_goals": ["life_goal"],
+    "main_concerns": ["main_concern"],
+    "education_levels": ["education_level"],
+    "tech_savvy_levels": ["tech_savvy_level", "tech_savvy"],
+    "political_leanings": ["political_leaning"],
+    "religions": ["religion"],
+    "risk_tolerance_levels": ["risk_tolerance", "risk_tolerance_level"],
+    "financial_attitudes": ["financial_attitude"],
+    "time_orientations": ["time_orientation"],
+    "occupations": ["occupation"],
+    "genders": ["gender"],
+    "countries": ["country"],
+    "cities": ["city"],
+}
+
+
+def _resolve_key(store: LibraryStore, key: str) -> str:
+    if store.has(key):
+        return key
+    for alt in _KEY_ALIASES.get(key, []):
+        if store.has(alt):
+            return alt
+    return key
 
 
 def _axis_score(rng: random.Random) -> int:
@@ -94,14 +172,16 @@ def _pick_unique_fallback(rng: random.Random, key: str, k: int) -> List[str]:
 
 
 def _pick(store: LibraryStore, rng: random.Random, key: str) -> str:
-    if store.has(key):
-        return store.pick(rng, key)
+    rk = _resolve_key(store, key)
+    if store.has(rk):
+        return store.pick(rng, rk)
     return _pick_fallback(rng, key)
 
 
 def _pick_unique(store: LibraryStore, rng: random.Random, key: str, k: int) -> List[str]:
-    if store.has(key):
-        return store.pick_unique(rng, key, k)
+    rk = _resolve_key(store, key)
+    if store.has(rk):
+        return store.pick_unique(rng, rk, k)
     return _pick_unique_fallback(rng, key, k)
 
 
@@ -145,13 +225,30 @@ def generate_persona(
     gender = _pick(libs, rng, "genders") or "unspecified"
     name = _build_name(libs, rng, gender)
 
-    country = _pick(libs, rng, "countries")
-    if libs.has_dep("cities", "countries") and country:
-        city = libs.pick_dep(rng, "cities", "countries", country, fallback_child="cities")
-    else:
-        city = _pick(libs, rng, "cities")
+    location = ""
 
-    location = f"{city}, {country}".strip(", ").strip()
+    if libs.has_chain(("streets", "cities", "countries")):
+        picked = libs.pick_chain(rng, ("streets", "cities", "countries"))
+        street = picked.get("streets", "")
+        city = picked.get("cities", "")
+        country = picked.get("countries", "")
+        parts = [p for p in [street, city, country] if p]
+        location = ", ".join(parts)
+
+    elif libs.has_chain(("cities", "countries")):
+        picked = libs.pick_chain(rng, ("cities", "countries"))
+        city = picked.get("cities", "")
+        country = picked.get("countries", "")
+        parts = [p for p in [city, country] if p]
+        location = ", ".join(parts)
+
+    else:
+        country = _pick(libs, rng, "countries")
+        if libs.has_dep("cities", "countries") and country:
+            city = libs.pick_dep(rng, "cities", "countries", country, fallback_child=_resolve_key(libs, "cities"))
+        else:
+            city = _pick(libs, rng, "cities")
+        location = f"{city}, {country}".strip(", ").strip()
 
     occupation = _pick(libs, rng, "occupations")
     interests = _pick_unique(libs, rng, "interests", 3)
@@ -193,6 +290,11 @@ def generate_persona(
         "time_orientations",
     }
 
+    # Also treat singular aliases as mapped so they do not leak into extras.
+    for alts in _KEY_ALIASES.values():
+        for a in alts:
+            mapped.add(a)
+
     extras: Dict[str, object] = {}
     for key in libs.keys():
         if key in mapped:
@@ -233,11 +335,7 @@ def persona_to_prompt(persona: Persona) -> str:
     interests = ", ".join(p["interests"])
 
     mbti = p["mbti"]
-    mbti_desc = (
-        f'{mbti["type_code"]} '
-        f'(I/E={mbti["ie"]}, N/S={mbti["ns"]}, '
-        f'T/F={mbti["tf"]}, P/J={mbti["pj"]})'
-    )
+    mbti_desc = f'{mbti["type_code"]} (I/E={mbti["ie"]}, N/S={mbti["ns"]}, T/F={mbti["tf"]}, P/J={mbti["pj"]})'
 
     extras = p.get("extras") or {}
     extras_bits = ""
