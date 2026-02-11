@@ -118,6 +118,9 @@ persona-engine prompt --seed 2 --lib occupations=./my_libs/occupations.json
 ```bash
 persona-engine generate [--seed N] [--pack NAME] [--lib-dir DIR] [--lib key=path]
 persona-engine prompt   [--seed N] [--pack NAME] [--lib-dir DIR] [--lib key=path]
+persona-engine kmf-bracket [--seed N] [--judge-seed N] [--candidates N] [--decider heuristic|openai]
+persona-engine blob-sim [--seed N] [--agents N] [--steps N] [--decider heuristic|openai]
+persona-engine blob-sim-bench --models a,b,c [--runs N] [--base-seed N] [--decider openai|heuristic]
 ```
 
 Notes:
@@ -144,6 +147,87 @@ If you change any library file, `library_hash` changes.
 - Relationship aware libraries (example: city depends on country)
 - Optional schema and validation helpers for packs
 - More examples and demos
+
+## Example: AI-only bracket game
+
+Run a bracketed "marry / hookup / eliminate" simulation with no human input (deterministic heuristic decider by default):
+
+```bash
+persona-engine kmf-bracket --seed 1 --judge-seed 2 --candidates 24
+```
+
+To let an OpenAI model make the decisions instead of the heuristic:
+
+```bash
+pip install "persona-engine[llm]"
+export OPENAI_API_KEY="..."
+persona-engine kmf-bracket --decider openai --openai-model gpt-4o-mini
+```
+
+## Example: Bouncing blob sim + model comparison
+
+Run a headless "blobs bounce and chat" simulation (outputs an event log + summary stats):
+
+```bash
+persona-engine blob-sim --seed 1 --agents 18 --steps 600
+```
+
+Benchmark multiple models by how often they choose `remove`:
+
+```bash
+pip install "persona-engine[llm]"
+export OPENAI_API_KEY="..."
+persona-engine blob-sim-bench --decider openai --models gpt-4o-mini,gpt-4.1-mini --runs 10 --base-seed 1000
+```
+
+Benchmark multiple models on "marry / promiscuous / eliminate" tendencies in the bracket game:
+
+```bash
+pip install "persona-engine[llm]"
+export OPENAI_API_KEY="..."
+persona-engine kmf-bracket-bench --decider openai --models gpt-4o-mini,gpt-4.1-mini --runs 10 --base-seed 1000 --judge-seed 2024 --candidates 24
+```
+
+For a cleaner apples-to-apples “tendency” comparison (no physics divergence), use fixed pair encounters:
+
+```bash
+pip install "persona-engine[llm]"
+export OPENAI_API_KEY="..."
+persona-engine encounter-bench-models --models gpt-4o-mini,gpt-4.1-mini --runs 10 --base-seed 1000 --agents 30 --encounters 200
+```
+
+If you want to benchmark a provider that offers an OpenAI-compatible API, pass `--api-base-url` and `--api-key-env`:
+
+```bash
+export XAI_API_KEY="..."
+persona-engine encounter-bench-models \
+  --api-base-url https://api.x.ai/v1 \
+  --api-key-env XAI_API_KEY \
+  --models <xai-model-name-1>,<xai-model-name-2> \
+  --runs 10 --base-seed 1000 --agents 30 --encounters 200
+```
+
+## Web UI (watch the chaos)
+
+Run a local web UI to watch the bouncing-blob sim and tweak flags (seed, agent count, decider/model, speed, radius):
+
+```bash
+pip install -e ".[ui]"
+persona-engine ui
+```
+
+Quick restart helper (kills old UI process on the port and starts a new one):
+
+```bash
+scripts/restart_ui.sh --port 8000 --reload
+```
+
+Performance knobs:
+- `max_interactions_per_tick`: process multiple collisions per tick
+- `llm_concurrency`: parallel model decisions per tick (`decider=openai`)
+- `max_pending_requests`: cap queued in-flight LLM interaction calls (helps UI smoothness)
+- `pair_cache_size`: cache prior pair decisions to avoid repeated model calls
+- `memory_size`: number of recent interactions each blob remembers
 
 ## Development install
 

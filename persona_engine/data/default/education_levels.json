@@ -1,10 +1,16 @@
 [
+  "no formal degree",
   "high school diploma",
+  "GED",
+  "trade certificate",
+  "apprenticeship",
   "some college",
   "associate degree",
   "bachelor degree",
+  "postgraduate certificate",
   "master degree",
+  "MBA",
   "PhD or doctorate",
-  "self taught"
+  "self taught",
+  "bootcamp graduate"
 ]
-

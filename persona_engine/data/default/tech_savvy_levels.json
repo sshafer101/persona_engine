@@ -1,8 +1,12 @@
 [
   "very low - struggles with basic apps",
   "low - uses email and web but not much else",
+  "basic - comfortable with phone and common apps",
   "medium - comfortable with most consumer tech",
+  "upper-medium - can troubleshoot common issues",
   "high - power user who configures their own tools",
-  "very high - builds or automates their own tools"
+  "high - automates repetitive tasks",
+  "very high - builds or automates their own tools",
+  "expert - scripts and self-hosts services",
+  "expert - deep systems and developer tooling fluency"
 ]
-

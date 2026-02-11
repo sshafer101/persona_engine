@@ -43,6 +43,13 @@ dev = [
   "twine>=5",
   "ruff>=0.6",
 ]
+llm = [
+  "openai>=1.0.0",
+]
+ui = [
+  "fastapi>=0.110",
+  "uvicorn[standard]>=0.24",
+]
 
 [tool.setuptools]
 include-package-data = true

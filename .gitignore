@@ -16,6 +16,10 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
+# local env
+.env
+.env.*
+
 # build artifacts
 /dist/
 *.egg-info/

@@ -2,11 +2,16 @@
   "none and secular",
   "spiritual but not religious",
   "Christian",
+  "Catholic",
+  "Protestant",
+  "Orthodox Christian",
   "Muslim",
   "Jewish",
   "Hindu",
   "Buddhist",
+  "Sikh",
   "agnostic",
-  "atheist"
+  "atheist",
+  "Unitarian Universalist",
+  "indigenous spiritual traditions"
 ]
-
