@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "persona-engine"
 version = "0.1.0"
-description = "Deterministic persona generator SDK for LLMs, games, simulations, and training."
+description = "Deterministic persona generator SDK for LLM persona workflows and testing."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }
@@ -42,13 +42,6 @@ dev = [
   "build>=1.2",
   "twine>=5",
   "ruff>=0.6",
-]
-llm = [
-  "openai>=1.0.0",
-]
-ui = [
-  "fastapi>=0.110",
-  "uvicorn[standard]>=0.24",
 ]
 
 [tool.setuptools]
